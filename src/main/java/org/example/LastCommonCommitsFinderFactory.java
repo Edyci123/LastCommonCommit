@@ -1,5 +1,11 @@
 package org.example;
 
+import org.example.exceptions.GithubUnauthorizedToken;
+import org.example.exceptions.GithubUserDoesNotExistException;
+import org.example.exceptions.GithubUserDoesNotHaveAccessToRepo;
+
+import java.io.IOException;
+
 public interface LastCommonCommitsFinderFactory {
 
     /**
@@ -11,6 +17,6 @@ public interface LastCommonCommitsFinderFactory {
      * @param token personal access token or null for anonymous access
      * @return an instance of LastCommonCommitsFinder
      */
-    LastCommonCommitsFinder create(String owner, String repo, String token);
+    LastCommonCommitsFinder create(String owner, String repo, String token) throws IOException, GithubUserDoesNotExistException, GithubUserDoesNotHaveAccessToRepo, GithubUnauthorizedToken;
 }
 

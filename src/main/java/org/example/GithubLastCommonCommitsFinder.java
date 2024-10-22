@@ -1,14 +1,15 @@
 package org.example;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.*;
 import java.net.HttpURLConnection;
-import java.net.URL;
 import java.io.InputStreamReader;
 import java.io.BufferedReader;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.exceptions.GithubUnauthorizedToken;
+import org.example.exceptions.GithubUserDoesNotExistException;
+import org.example.exceptions.GithubUserDoesNotHaveAccessToRepo;
 
 public class GithubLastCommonCommitsFinder implements LastCommonCommitsFinder {
 
@@ -17,8 +18,14 @@ public class GithubLastCommonCommitsFinder implements LastCommonCommitsFinder {
     private final String token;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public GithubLastCommonCommitsFinder(String owner, String repo, String token) {
+    public GithubLastCommonCommitsFinder(String owner, String repo, String token) throws IOException, GithubUserDoesNotExistException, GithubUserDoesNotHaveAccessToRepo, GithubUnauthorizedToken {
+        if (!GithubUtils.checkUserExistsByUsername(owner, token)) {
+            throw new GithubUserDoesNotExistException(owner);
+        }
         this.owner = owner;
+        if (!GithubUtils.checkUserHasRepo(owner, repo, token)) {
+            throw new GithubUserDoesNotHaveAccessToRepo(owner, repo);
+        }
         this.repo = repo;
         this.token = token;
     }
@@ -34,11 +41,10 @@ public class GithubLastCommonCommitsFinder implements LastCommonCommitsFinder {
         return findLastCommon(commonCommits, commitsA, commitsB);
     }
 
-    private List<String> fetchCommits(String branch) throws IOException {
+    public List<String> fetchCommits(String branch) throws IOException {
         String url = String.format("https://api.github.com/repos/%s/%s/commits?sha=%s", owner, repo, branch);
-        HttpURLConnection connection = createConnection(url);
+        HttpURLConnection connection = GithubUtils.createConnection(url, token);
 
-        // Read the response
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
             JsonNode jsonResponse = objectMapper.readTree(reader);
             List<String> commits = new ArrayList<>();
@@ -47,25 +53,6 @@ public class GithubLastCommonCommitsFinder implements LastCommonCommitsFinder {
                 commits.add(sha);
             }
             return commits;
-        }
-    }
-
-    private HttpURLConnection createConnection(String urlString) throws IOException {
-        try {
-            URI uri = new URI(urlString);
-            URL apiUrl = uri.toURL();
-
-            HttpURLConnection connection = (HttpURLConnection) apiUrl.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("Accept", "application/vnd.github.v3+json");
-
-            if (token != null && !token.isEmpty()) {
-                connection.setRequestProperty("Authorization", "token " + token);
-            }
-
-            return connection;
-        } catch (Exception e) {
-            throw new IOException("Failed to create connection", e);
         }
     }
 
