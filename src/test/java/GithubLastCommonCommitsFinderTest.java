@@ -1,14 +1,15 @@
-import org.example.GithubLastCommonCommitsFinder;
-import org.example.GithubUtils;
+import org.example.GithubFinder.GithubLastCommonCommitsFinder;
+import org.example.utils.GithubUtils;
+import org.example.utils.CacheUtil;
 import org.example.exceptions.GithubUnauthorizedToken;
 import org.example.exceptions.GithubUserDoesNotExistException;
 import org.example.exceptions.GithubUserDoesNotHaveAccessToRepo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
+import org.mockito.*;
 
 import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,54 +23,96 @@ public class GithubLastCommonCommitsFinderTest {
 
     private GithubLastCommonCommitsFinder finder;
 
+    @Mock
+    private CacheUtil cacheUtil;
+
     @BeforeEach
     public void setup() throws IOException, GithubUserDoesNotExistException, GithubUserDoesNotHaveAccessToRepo, GithubUnauthorizedToken {
+        MockitoAnnotations.openMocks(this);
+
         try (MockedStatic<GithubUtils> mockedUtils = Mockito.mockStatic(GithubUtils.class)) {
-            mockedUtils.when(() -> GithubUtils.checkUserExistsByUsername(anyString(), anyString())).thenReturn(true);
-            mockedUtils.when(() -> GithubUtils.checkUserHasRepo(anyString(), anyString(), anyString())).thenReturn(true);
+            mockedUtils.when(() -> GithubUtils.checkUserExistsByUsername(OWNER, TOKEN)).thenReturn(true);
+            mockedUtils.when(() -> GithubUtils.checkUserHasRepo(OWNER, REPO, TOKEN)).thenReturn(true);
 
             finder = spy(new GithubLastCommonCommitsFinder(OWNER, REPO, TOKEN));
+            finder.setCacheUtil(cacheUtil);
         }
+
+        reset(cacheUtil);
     }
 
     @Test
-    public void testFindLastCommonCommits_CommonExists() throws IOException {
+    public void testFindLastCommonCommits_CommonExists() throws IOException, GithubUserDoesNotHaveAccessToRepo {
         List<String> commitsBranchA = Arrays.asList("commitA1", "commitA2", "commonCommit");
         List<String> commitsBranchB = Arrays.asList("commitB1", "commonCommit", "commitB2");
 
-        doReturn(commitsBranchA).when(finder).fetchCommits("branchA");
-        doReturn(commitsBranchB).when(finder).fetchCommits("branchB");
+        when(cacheUtil.get(OWNER, REPO, "branchA")).thenReturn(new ArrayList<>());
+        when(cacheUtil.get(OWNER, REPO, "branchB")).thenReturn(new ArrayList<>());
+
+        doReturn(commitsBranchA).when(finder).fetchCommits("branchA", 1);
+        doReturn(commitsBranchB).when(finder).fetchCommits("branchB", 1);
 
         Collection<String> result = finder.findLastCommonCommits("branchA", "branchB");
 
         assertEquals(1, result.size());
         assertEquals("commonCommit", result.iterator().next());
+
+        verify(cacheUtil).put(OWNER, REPO, "branchA", commitsBranchA);
+        verify(cacheUtil).put(OWNER, REPO, "branchB", commitsBranchB);
     }
 
     @Test
-    public void testFindLastCommonCommits_NoCommonCommits() throws IOException {
+    public void testFindLastCommonCommits_NoCommonCommits() throws IOException, GithubUserDoesNotHaveAccessToRepo {
         List<String> commitsBranchA = Arrays.asList("commitA1", "commitA2", "commitA3");
         List<String> commitsBranchB = Arrays.asList("commitB1", "commitB2", "commitB3");
 
-        doReturn(commitsBranchA).when(finder).fetchCommits("branchA");
-        doReturn(commitsBranchB).when(finder).fetchCommits("branchB");
+        when(cacheUtil.get(OWNER, REPO, "branch1")).thenReturn(new ArrayList<>());
+        when(cacheUtil.get(OWNER, REPO, "branch2")).thenReturn(new ArrayList<>());
 
-        Collection<String> result = finder.findLastCommonCommits("branchA", "branchB");
+        doReturn(commitsBranchA).when(finder).fetchCommits("branch1", 1);
+        doReturn(commitsBranchB).when(finder).fetchCommits("branch2", 1);
 
-        assertTrue(result.isEmpty());
+        doReturn(new ArrayList<>()).when(finder).fetchCommits("branch1", 2);
+        doReturn(new ArrayList<>()).when(finder).fetchCommits("branch2", 2);
+
+        Collection<String> result = finder.findLastCommonCommits("branch1", "branch2");
+
+        assertTrue(result.isEmpty(), "Expected no common commits but found some.");
     }
 
     @Test
-    public void testFindLastCommonCommits_OneBranchEmpty() throws IOException {
+    public void testFindLastCommonCommits_OneBranchEmpty() throws IOException, GithubUserDoesNotHaveAccessToRepo {
         List<String> commitsBranchA = Arrays.asList("commitA1", "commitA2", "commitA3");
         List<String> commitsBranchB = Collections.emptyList();
 
-        doReturn(commitsBranchA).when(finder).fetchCommits("branchA");
-        doReturn(commitsBranchB).when(finder).fetchCommits("branchB");
+        when(cacheUtil.get(OWNER, REPO, "branchA")).thenReturn(new ArrayList<>());
+        when(cacheUtil.get(OWNER, REPO, "branchB")).thenReturn(new ArrayList<>());
+
+        doReturn(commitsBranchA).when(finder).fetchCommits("branchA", 1);
+        doReturn(commitsBranchB).when(finder).fetchCommits("branchB", 1);
+
+        doReturn(new ArrayList<>()).when(finder).fetchCommits("branchA", 2);
+        doReturn(new ArrayList<>()).when(finder).fetchCommits("branchB", 2);
 
         Collection<String> result = finder.findLastCommonCommits("branchA", "branchB");
 
-        assertTrue(result.isEmpty());
+        assertTrue(result.isEmpty(), "Expected no common commits with one branch empty.");
+    }
+
+    @Test
+    public void testFetchCommitsFromCache() throws IOException, GithubUserDoesNotHaveAccessToRepo {
+        List<String> cachedCommitsBranchA = Arrays.asList("commitA1", "commitA2", "commonCommit");
+        List<String> cachedCommitsBranchB = Arrays.asList("commitB1", "commonCommit", "commitB2");
+
+        when(cacheUtil.get(OWNER, REPO, "branchA")).thenReturn(cachedCommitsBranchA);
+        when(cacheUtil.get(OWNER, REPO, "branchB")).thenReturn(cachedCommitsBranchB);
+
+        Collection<String> result = finder.findLastCommonCommits("branchA", "branchB");
+
+        assertEquals(1, result.size());
+        assertTrue(result.contains("commonCommit"), "Expected 'commonCommit' to be found as the last common commit.");
+        verify(finder, never()).fetchCommits("branchA", 1);
+        verify(finder, never()).fetchCommits("branchB", 1);
     }
 
     @Test
@@ -110,11 +153,28 @@ public class GithubLastCommonCommitsFinderTest {
     }
 
     @Test
-    public void testGithubApiError() throws IOException {
-        doThrow(new IOException("GitHub API error")).when(finder).fetchCommits("branchA");
+    public void testGithubApiError() throws IOException, GithubUserDoesNotHaveAccessToRepo {
+        doThrow(new IOException("GitHub API error")).when(finder).fetchCommits("branchA", 1);
 
         assertThrows(IOException.class, () -> {
             finder.findLastCommonCommits("branchA", "branchB");
         });
+    }
+
+    @Test
+    public void testFetchCommits_404NotFound() throws IOException {
+        try (MockedStatic<GithubUtils> mockedUtils = Mockito.mockStatic(GithubUtils.class)) {
+            mockedUtils.when(() -> GithubUtils.checkUserExistsByUsername(anyString(), anyString())).thenReturn(true);
+            mockedUtils.when(() -> GithubUtils.checkUserHasRepo(anyString(), anyString(), anyString())).thenReturn(true);
+
+            HttpURLConnection mockConnection = mock(HttpURLConnection.class);
+            when(mockConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_NOT_FOUND);
+
+            mockedUtils.when(() -> GithubUtils.createConnection(anyString(), anyString())).thenReturn(mockConnection);
+
+            assertThrows(GithubUserDoesNotHaveAccessToRepo.class, () -> {
+                finder.fetchCommits("nonexistentBranch", 1);
+            });
+        }
     }
 }

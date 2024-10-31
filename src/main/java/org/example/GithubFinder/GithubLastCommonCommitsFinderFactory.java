@@ -1,5 +1,7 @@
-package org.example;
+package org.example.GithubFinder;
 
+import org.example.LastCommonCommitsFinder;
+import org.example.LastCommonCommitsFinderFactory;
 import org.example.exceptions.GithubUnauthorizedToken;
 import org.example.exceptions.GithubUserDoesNotExistException;
 import org.example.exceptions.GithubUserDoesNotHaveAccessToRepo;

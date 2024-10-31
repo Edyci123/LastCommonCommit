@@ -1,10 +1,10 @@
 package org.example;
 
+import org.example.GithubFinder.GithubLastCommonCommitsFinderFactory;
 import org.example.exceptions.GithubUnauthorizedToken;
 import org.example.exceptions.GithubUserDoesNotExistException;
 import org.example.exceptions.GithubUserDoesNotHaveAccessToRepo;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collection;
 
@@ -21,7 +21,7 @@ public class Main {
             String token = args[2];
             LastCommonCommitsFinder finder = factory.create(owner, repo, token);
 
-            Collection<String> commonCommits = finder.findLastCommonCommits("branchA", "branchA");
+            Collection<String> commonCommits = finder.findLastCommonCommits("main", "branchA");
 
             System.out.println("Last common commits:");
             for (String commit : commonCommits) {

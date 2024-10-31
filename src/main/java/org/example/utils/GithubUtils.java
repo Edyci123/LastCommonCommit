@@ -1,4 +1,4 @@
-package org.example;
+package org.example.utils;
 
 import org.example.exceptions.GithubUnauthorizedToken;
 
@@ -9,7 +9,8 @@ import java.net.URL;
 
 public class GithubUtils {
 
-    public static HttpURLConnection createConnection(String urlString, String token) throws IOException {
+    public static HttpURLConnection
+     createConnection(String urlString, String token) throws IOException {
         try {
             URI uri = new URI(urlString);
             URL apiUrl = uri.toURL();
