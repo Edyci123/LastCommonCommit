@@ -1,9 +1,7 @@
 package org.example;
 
 import org.example.GithubFinder.GithubLastCommonCommitsFinderFactory;
-import org.example.exceptions.GithubUnauthorizedToken;
-import org.example.exceptions.GithubUserDoesNotExistException;
-import org.example.exceptions.GithubUserDoesNotHaveAccessToRepo;
+import org.example.exceptions.*;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -32,6 +30,8 @@ public class Main {
             System.out.println("Something went wrong!");
         } catch (GithubUserDoesNotExistException | GithubUserDoesNotHaveAccessToRepo | GithubUnauthorizedToken e) {
             System.out.println(e.getMessage());
+        } catch (GithubRequestTimeoutException | GithubConnectionException e) {
+            throw new RuntimeException(e);
         }
     }
 }

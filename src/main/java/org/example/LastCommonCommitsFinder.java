@@ -1,5 +1,7 @@
 package org.example;
 
+import org.example.exceptions.GithubConnectionException;
+import org.example.exceptions.GithubRequestTimeoutException;
 import org.example.exceptions.GithubUserDoesNotHaveAccessToRepo;
 
 import java.io.IOException;
@@ -16,7 +18,7 @@ public interface LastCommonCommitsFinder {
      * @return  a collection of SHAs of the last common commits
      * @throws IOException  if any error occurs during the process
      */
-    Collection<String> findLastCommonCommits(String branchA, String branchB) throws IOException, GithubUserDoesNotHaveAccessToRepo;
+    Collection<String> findLastCommonCommits(String branchA, String branchB) throws IOException, GithubUserDoesNotHaveAccessToRepo, GithubRequestTimeoutException, GithubConnectionException;
 
 }
 

@@ -9,9 +9,7 @@ import java.io.BufferedReader;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.LastCommonCommitsFinder;
-import org.example.exceptions.GithubUnauthorizedToken;
-import org.example.exceptions.GithubUserDoesNotExistException;
-import org.example.exceptions.GithubUserDoesNotHaveAccessToRepo;
+import org.example.exceptions.*;
 import org.example.utils.CacheUtil;
 import org.example.utils.GithubUtils;
 
@@ -23,7 +21,7 @@ public class GithubLastCommonCommitsFinder implements LastCommonCommitsFinder {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private CacheUtil cacheUtil;
 
-    public GithubLastCommonCommitsFinder(String owner, String repo, String token) throws IOException, GithubUserDoesNotExistException, GithubUserDoesNotHaveAccessToRepo, GithubUnauthorizedToken {
+    public GithubLastCommonCommitsFinder(String owner, String repo, String token) throws GithubUserDoesNotExistException, GithubUserDoesNotHaveAccessToRepo, GithubUnauthorizedToken, GithubRequestTimeoutException, GithubConnectionException {
         if (!GithubUtils.checkUserExistsByUsername(owner, token)) {
             throw new GithubUserDoesNotExistException(owner);
         }
@@ -37,7 +35,7 @@ public class GithubLastCommonCommitsFinder implements LastCommonCommitsFinder {
     }
 
     @Override
-    public Collection<String> findLastCommonCommits(String branchA, String branchB) throws IOException, GithubUserDoesNotHaveAccessToRepo {
+    public Collection<String> findLastCommonCommits(String branchA, String branchB) throws GithubUserDoesNotHaveAccessToRepo, GithubRequestTimeoutException, GithubConnectionException {
         List<String> commitsA = fetchCacheCommits(branchA);
         List<String> commitsB = fetchCacheCommits(branchB);
 
@@ -98,29 +96,41 @@ public class GithubLastCommonCommitsFinder implements LastCommonCommitsFinder {
         return cacheUtil.get(owner, repo, branch);
     }
 
-    public List<String> fetchCommits(String branch, int page) throws IOException, GithubUserDoesNotHaveAccessToRepo {
+    public List<String> fetchCommits(String branch, int page) throws GithubUserDoesNotHaveAccessToRepo, GithubConnectionException, GithubRequestTimeoutException {
         List<String> commits = new ArrayList<>();
-
         String url = String.format("https://api.github.com/repos/%s/%s/commits?sha=%s&page=%d", owner, repo, branch, page);
-        HttpURLConnection connection = GithubUtils.createConnection(url, token);
+        HttpURLConnection connection = null;
 
-        if (connection.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND || connection.getResponseCode() == HttpURLConnection.HTTP_UNAUTHORIZED) {
-            throw new GithubUserDoesNotHaveAccessToRepo(owner, repo);
-        }
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
-            JsonNode jsonResponse = objectMapper.readTree(reader);
-            if (jsonResponse.isEmpty()) {
-                return commits;
+        try {
+            connection = GithubUtils.createConnection(url, token);
+
+            if (connection.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND || connection.getResponseCode() == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                throw new GithubUserDoesNotHaveAccessToRepo(owner, repo);
             }
 
-            for (JsonNode commit : jsonResponse) {
-                String sha = commit.get("sha").asText();
-                commits.add(sha);
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                JsonNode jsonResponse = objectMapper.readTree(reader);
+                if (jsonResponse.isEmpty()) {
+                    return commits;
+                }
+                for (JsonNode commit : jsonResponse) {
+                    String sha = commit.get("sha").asText();
+                    commits.add(sha);
+                }
+            }
+        } catch (java.net.SocketTimeoutException e) {
+            throw new GithubRequestTimeoutException("Request timed out while fetching commits for branch " + branch, e);
+        } catch (IOException e) {
+            throw new GithubConnectionException("Connection failed while fetching commits for branch " + branch, e);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
             }
         }
 
         return commits;
     }
+
 
     private Collection<String> findLastCommon(Set<String> commonCommits, List<String> commitsA, List<String> commitsB) {
         Set<String> lastCommonCommits = new HashSet<>();

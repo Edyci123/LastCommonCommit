@@ -1,9 +1,7 @@
 import org.example.GithubFinder.GithubLastCommonCommitsFinder;
+import org.example.exceptions.*;
 import org.example.utils.GithubUtils;
 import org.example.utils.CacheUtil;
-import org.example.exceptions.GithubUnauthorizedToken;
-import org.example.exceptions.GithubUserDoesNotExistException;
-import org.example.exceptions.GithubUserDoesNotHaveAccessToRepo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;
@@ -27,7 +25,7 @@ public class GithubLastCommonCommitsFinderTest {
     private CacheUtil cacheUtil;
 
     @BeforeEach
-    public void setup() throws IOException, GithubUserDoesNotExistException, GithubUserDoesNotHaveAccessToRepo, GithubUnauthorizedToken {
+    public void setup() throws GithubUserDoesNotExistException, GithubUserDoesNotHaveAccessToRepo, GithubUnauthorizedToken, GithubRequestTimeoutException, GithubConnectionException {
         MockitoAnnotations.openMocks(this);
 
         try (MockedStatic<GithubUtils> mockedUtils = Mockito.mockStatic(GithubUtils.class)) {
@@ -42,7 +40,7 @@ public class GithubLastCommonCommitsFinderTest {
     }
 
     @Test
-    public void testFindLastCommonCommits_CommonExists() throws IOException, GithubUserDoesNotHaveAccessToRepo {
+    public void testFindLastCommonCommits_CommonExists() throws IOException, GithubUserDoesNotHaveAccessToRepo, GithubRequestTimeoutException, GithubConnectionException {
         List<String> commitsBranchA = Arrays.asList("commitA1", "commitA2", "commonCommit");
         List<String> commitsBranchB = Arrays.asList("commitB1", "commonCommit", "commitB2");
 
@@ -62,7 +60,7 @@ public class GithubLastCommonCommitsFinderTest {
     }
 
     @Test
-    public void testFindLastCommonCommits_NoCommonCommits() throws IOException, GithubUserDoesNotHaveAccessToRepo {
+    public void testFindLastCommonCommits_NoCommonCommits() throws IOException, GithubUserDoesNotHaveAccessToRepo, GithubRequestTimeoutException, GithubConnectionException {
         List<String> commitsBranchA = Arrays.asList("commitA1", "commitA2", "commitA3");
         List<String> commitsBranchB = Arrays.asList("commitB1", "commitB2", "commitB3");
 
@@ -81,7 +79,7 @@ public class GithubLastCommonCommitsFinderTest {
     }
 
     @Test
-    public void testFindLastCommonCommits_OneBranchEmpty() throws IOException, GithubUserDoesNotHaveAccessToRepo {
+    public void testFindLastCommonCommits_OneBranchEmpty() throws IOException, GithubUserDoesNotHaveAccessToRepo, GithubRequestTimeoutException, GithubConnectionException {
         List<String> commitsBranchA = Arrays.asList("commitA1", "commitA2", "commitA3");
         List<String> commitsBranchB = Collections.emptyList();
 
@@ -100,7 +98,7 @@ public class GithubLastCommonCommitsFinderTest {
     }
 
     @Test
-    public void testFetchCommitsFromCache() throws IOException, GithubUserDoesNotHaveAccessToRepo {
+    public void testFetchCommitsFromCache() throws IOException, GithubUserDoesNotHaveAccessToRepo, GithubRequestTimeoutException, GithubConnectionException {
         List<String> cachedCommitsBranchA = Arrays.asList("commitA1", "commitA2", "commonCommit");
         List<String> cachedCommitsBranchB = Arrays.asList("commitB1", "commonCommit", "commitB2");
 
@@ -153,13 +151,23 @@ public class GithubLastCommonCommitsFinderTest {
     }
 
     @Test
-    public void testGithubApiError() throws IOException, GithubUserDoesNotHaveAccessToRepo {
-        doThrow(new IOException("GitHub API error")).when(finder).fetchCommits("branchA", 1);
+    public void testGithubApiError() throws GithubUserDoesNotHaveAccessToRepo, GithubRequestTimeoutException, GithubConnectionException {
+        doThrow(new GithubConnectionException("Error", new Throwable())).when(finder).fetchCommits("branchA", 1);
 
-        assertThrows(IOException.class, () -> {
+        assertThrows(GithubConnectionException.class, () -> {
             finder.findLastCommonCommits("branchA", "branchB");
         });
     }
+
+    @Test
+    public void testGithubApiErrorTimeout() throws GithubUserDoesNotHaveAccessToRepo, GithubRequestTimeoutException, GithubConnectionException {
+        doThrow(new GithubRequestTimeoutException("Error", new Throwable())).when(finder).fetchCommits("branchA", 1);
+
+        assertThrows(GithubRequestTimeoutException.class, () -> {
+            finder.findLastCommonCommits("branchA", "branchB");
+        });
+    }
+
 
     @Test
     public void testFetchCommits_404NotFound() throws IOException {
