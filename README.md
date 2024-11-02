@@ -43,5 +43,7 @@ Ideas for the future:
 -
 - Save the timestamp for the latest commit in the cache, and check everytime if the branch was updated in the meanwhile,
 by comparing the saved timestamp with the last change timestamp on the branch.
-- Display also the names of the branches available to choose from
+- Display also the names of the branches available to choose from,
+displaying them in the terminal and let you choose the preferred branches, 
+making the process more interactive.
 - Add GitHub OAuth and display the data more beautifully

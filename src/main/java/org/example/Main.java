@@ -8,8 +8,8 @@ import java.util.Collection;
 
 public class Main {
     public static void main(String[] args) {
-        if (args.length == 0) {
-            System.out.println("You have to specify OWNER REPO ACCESS_TOKEN in this order as args");
+        if (args.length < 5) {
+            System.out.println("You have to specify OWNER REPO ACCESS_TOKEN BRANCH_1 BRANCH_2 in this order as args");
             return;
         }
         try {
@@ -19,7 +19,7 @@ public class Main {
             String token = args[2];
             LastCommonCommitsFinder finder = factory.create(owner, repo, token);
 
-            Collection<String> commonCommits = finder.findLastCommonCommits("main", "branchA");
+            Collection<String> commonCommits = finder.findLastCommonCommits(args[3], args[4]);
 
             System.out.println("Last common commits:");
             for (String commit : commonCommits) {
